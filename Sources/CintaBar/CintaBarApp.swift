@@ -1,22 +1,33 @@
-import SwiftUI
+import AppKit
+import TreadmillKit
 
 @main
-struct CintaBarApp: App {
-    @NSApplicationDelegateAdaptor private var delegate: AppDelegate
-
-    var body: some Scene {
-        MenuBarExtra {
-            TreadmillMenu(treadmill: delegate.treadmill)
-        } label: {
-            MenuBarLabel(treadmill: delegate.treadmill)
-        }
+enum CintaBarApp {
+    static func main() {
+        let app = NSApplication.shared
+        // Info.plist already marks the app as an agent; this covers `swift run`, which has no bundle.
+        app.setActivationPolicy(.accessory)
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        // NSApplication doesn't retain its delegate.
+        withExtendedLifetime(delegate) { app.run() }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    // Owned here rather than by a view so the connection starts at launch, not when the menu
-    // first opens.
-    let treadmill = Treadmill()
+    private let treadmill: Treadmill
+    private var statusMenu: StatusMenuController?
+
+    override init() {
+        // `--simulate` swaps Bluetooth for a pretend treadmill, to work on the app without one.
+        let link: any TreadmillLink = CommandLine.arguments.contains("--simulate") ? SimulatedLink() : BluetoothLink()
+        treadmill = Treadmill(link: link)
+        super.init()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        statusMenu = StatusMenuController(treadmill: treadmill)
+    }
 
     func applicationWillTerminate(_ notification: Notification) {
         treadmill.disconnect()

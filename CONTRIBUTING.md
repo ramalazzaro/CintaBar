@@ -35,10 +35,17 @@ Scripts/build.sh     # Assemble build/CintaBar.app
 `Scripts/test.sh` is `swift test` plus the flags Swift Testing needs when only the Command Line
 Tools are installed.
 
+You don't need a treadmill to work on the menu. `--simulate` replaces Bluetooth with a pretend
+one that counts down, ramps its speed and reports every second:
+
+```bash
+Scripts/build.sh && open build/CintaBar.app --args --simulate
+```
+
 ## Pull requests
 
-- Keep protocol logic in `TreadmillKit` and cover it with tests. The app target should only hold
-  Bluetooth plumbing and UI.
+- Keep protocol logic and the `Treadmill` model in `TreadmillKit` and cover them with tests. The
+  app target should only hold Bluetooth plumbing, the simulator and UI.
 - Format before committing, and make sure the linter passes:
 
   ```bash

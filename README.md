@@ -14,7 +14,7 @@ stop and change speed without reaching for your phone. *Cinta* is Spanish for tr
 - Start, pause, resume and stop the belt.
 - Start straight at a chosen speed, and change it in 0.1 or 0.5 km/h steps.
 - Incline control on treadmills with a motorized incline.
-- Live speed in the menu bar; elapsed time and distance in the menu.
+- Live speed, elapsed time and distance, in the menu and, if you like, next to the icon.
 - Remembers your treadmill and reconnects when it powers on, without scanning.
 - Speaks both the standard Fitness Machine Service (FTMS) and FitShow's proprietary protocol.
 - Sandboxed, with Bluetooth as its only entitlement. No network access, no analytics.
@@ -51,6 +51,9 @@ CODESIGN_IDENTITY="Apple Development: Your Name (TEAMID)" Scripts/build.sh --ins
    look under **Other Devices**.
 3. Use **Start**, or **Start At** to go straight to a speed once the countdown ends.
 
+**Show in Menu Bar** picks what appears next to the icon while you walk: speed, time, distance,
+any combination, or nothing.
+
 CintaBar only ever connects to a treadmill you picked, and it remembers that choice. From then on
 it reconnects by itself whenever the treadmill powers on. **Forget …** drops the choice.
 
@@ -74,10 +77,11 @@ warranty; see the [license](LICENSE).
 
 The code is split in two:
 
-- [`TreadmillKit`](Sources/TreadmillKit) encodes and decodes the two wire protocols. It has no
-  Bluetooth or UI code, so all of it is unit tested.
-- [`CintaBar`](Sources/CintaBar) is the app: a Core Bluetooth central and a SwiftUI
-  `MenuBarExtra`.
+- [`TreadmillKit`](Sources/TreadmillKit) holds the two wire protocols and the `Treadmill` model
+  the menu is built on. It has no Bluetooth or UI code, so all of it is unit tested.
+- [`CintaBar`](Sources/CintaBar) is the app: a Core Bluetooth link that feeds the model, a
+  simulated link for development, and an AppKit status item whose menu updates in place while
+  it's open.
 
 On connecting, CintaBar looks for these GATT services and uses the first one it finds:
 
@@ -121,6 +125,12 @@ log stream --level debug --predicate 'subsystem == "io.github.cintabar.CintaBar"
 swift build          # Build
 Scripts/test.sh      # Run the unit tests
 swift format lint --strict --recursive Package.swift Sources Tests
+```
+
+To work on the app without a treadmill, launch it with a simulated one:
+
+```bash
+Scripts/build.sh && open build/CintaBar.app --args --simulate
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for more.
