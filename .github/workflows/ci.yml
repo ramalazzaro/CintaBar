@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Show Swift version
+        run: swift --version
+      - name: Lint
+        run: swift format lint --strict --recursive Package.swift Sources Tests
+      - name: Test
+        run: Scripts/test.sh
+      - name: Build app bundle
+        run: Scripts/build.sh

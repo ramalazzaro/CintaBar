@@ -1,0 +1,13 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# App bundle assembled by Scripts/build.sh
+build/
+
+# Xcode
+xcuserdata/
+*.xcodeproj/
+
+# macOS
+.DS_Store
