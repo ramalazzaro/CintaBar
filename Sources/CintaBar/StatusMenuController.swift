@@ -11,13 +11,16 @@ import TreadmillKit
 final class StatusMenuController: NSObject, NSMenuDelegate {
     /// What the menu bar item can show next to its icon.
     enum LabelField: String, CaseIterable {
-        case speed, time, distance
+        case speed, time, distance, calories, steps, heartRate
 
         var title: String {
             switch self {
             case .speed: "Speed"
             case .time: "Time"
             case .distance: "Distance"
+            case .calories: "Calories"
+            case .steps: "Steps"
+            case .heartRate: "Heart Rate"
             }
         }
     }
@@ -206,6 +209,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             }
             updatePresetStates()
         case .paused:
+            // Also a belt stopped in place of a pause, on a treadmill that ignores one. Resuming
+            // it goes back to the speed it had.
             menu.addItem(item("Resume") { treadmill.start() })
             menu.addItem(item("Stop") { treadmill.stop() })
         case .countdown:
@@ -345,20 +350,22 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: - Text
 
     private var labelText: String {
-        var parts: [String] = []
-        for field in labelFields {
-            switch field {
-            case .speed where treadmill.isMoving:
-                parts.append(format(speed: treadmill.speed))
-            case .time where treadmill.session.elapsed > 0:
-                parts.append(format(elapsed: treadmill.session.elapsed))
-            case .distance where treadmill.session.elapsed > 0:
-                parts.append(format(distance: treadmill.session.distance))
-            default:
-                break
-            }
+        labelFields.compactMap(text(for:)).joined(separator: " · ")
+    }
+
+    /// What a field reads right now, or `nil` while the treadmill has nothing to say about it.
+    /// Calories, steps and heart rate only ever show on treadmills that report them.
+    private func text(for field: LabelField) -> String? {
+        let session = treadmill.session
+        return switch field {
+        case .speed: treadmill.isMoving ? format(speed: treadmill.speed) : nil
+        case .time: session.elapsed > 0 ? format(elapsed: session.elapsed) : nil
+        case .distance: session.elapsed > 0 ? format(distance: session.distance) : nil
+        // Shown from the first whole one, so it never reads zero.
+        case .calories: session.calories >= 1 ? format(calories: session.calories) : nil
+        case .steps: session.steps > 0 ? format(steps: session.steps) : nil
+        case .heartRate: treadmill.heartRate.map(format(heartRate:))
         }
-        return parts.joined(separator: " · ")
     }
 
     private var headline: String {
@@ -369,6 +376,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             "Allow Bluetooth for CintaBar in System Settings › Privacy & Security"
         case .unavailable(.unsupported):
             "This Mac doesn’t support Bluetooth LE"
+        case .unavailable(.permissionPending):
+            "Waiting for Bluetooth permission…"
         case .unavailable(.unknown):
             "Bluetooth isn’t available"
         case .searching where likelyTreadmills.isEmpty:
@@ -393,8 +402,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
     }
 
+    /// Everything but the speed, which the headline shows.
     private var sessionSummary: String {
-        "\(format(elapsed: treadmill.session.elapsed)) · \(format(distance: treadmill.session.distance))"
+        let fields: [LabelField] = [.time, .distance, .calories, .steps, .heartRate]
+        return fields.compactMap(text(for:)).joined(separator: " · ")
     }
 
     private func format(speed: Double) -> String {
@@ -413,6 +424,22 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private func format(elapsed: Int) -> String {
         Duration.seconds(elapsed).formatted(.time(pattern: elapsed >= 3600 ? .hourMinuteSecond : .minuteSecond))
+    }
+
+    private func format(calories: Double) -> String {
+        Measurement(value: calories, unit: UnitEnergy.kilocalories)
+            .formatted(
+                .measurement(
+                    width: .abbreviated, usage: .asProvided, numberFormatStyle: .number.precision(.fractionLength(0))))
+    }
+
+    /// Foundation has no units for steps or beats per minute, so only the numbers are formatted.
+    private func format(steps: Int) -> String {
+        "\(steps.formatted()) \(steps == 1 ? "step" : "steps")"
+    }
+
+    private func format(heartRate: Int) -> String {
+        "\(heartRate.formatted()) bpm"
     }
 
     // MARK: - Presets

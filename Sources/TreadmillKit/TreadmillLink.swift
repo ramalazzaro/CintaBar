@@ -7,6 +7,11 @@ import Foundation
 /// ``eventHandler``, always on the main actor.
 @MainActor
 public protocol TreadmillLink: AnyObject {
+    /// Where the link reports to.
+    ///
+    /// Whoever sets this only starts listening then, and a link usually knows something by that
+    /// point. So setting a handler has the link report its current ``LinkEvent/connection(_:)``
+    /// at once, rather than leaving the listener on a guess until the next change.
     var eventHandler: (@MainActor (LinkEvent) -> Void)? { get set }
 
     /// Looks for nearby treadmills for a while, reporting them as ``LinkEvent/candidates(_:)``.
@@ -20,6 +25,12 @@ public protocol TreadmillLink: AnyObject {
     /// Switches protocol on a treadmill that offers more than one, reconnecting if needed.
     func use(_ wireProtocol: WireProtocol)
     func send(_ command: TreadmillCommand)
+    /// Keeps what ``Treadmill`` learned about the connected treadmill: whether it ignores a pause.
+    ///
+    /// The model has nowhere to keep it, and can't tell one treadmill from another. The link
+    /// files it with the treadmill and protocol in use, and hands it back as
+    /// ``LinkEvent/ignoresPause(_:)`` every time that treadmill becomes ready again.
+    func remember(ignoresPause: Bool)
 }
 
 public enum LinkEvent: Equatable, Sendable {
@@ -32,6 +43,9 @@ public enum LinkEvent: Equatable, Sendable {
     /// Supported inclines and the step between them: levels for FitShow, percent for FTMS.
     case inclineRange(ClosedRange<Double>, step: Double)
     case sample(Sample)
+    /// What ``TreadmillLink/remember(ignoresPause:)`` last kept for this treadmill, `false` if
+    /// nothing. Sent just before every ``Connection/ready(name:)``.
+    case ignoresPause(Bool)
 }
 
 public enum TreadmillCommand: Equatable, Sendable {
@@ -54,6 +68,8 @@ public enum Connection: Equatable, Sendable {
 
     public enum Unavailability: Equatable, Sendable {
         case poweredOff, unauthorized, unsupported, unknown
+        /// macOS is asking the user for Bluetooth permission, and nothing works until they answer.
+        case permissionPending
     }
 }
 
@@ -89,15 +105,25 @@ public struct Sample: Equatable, Sendable {
     public var elapsed: Int?
     /// Kilometers since the workout started.
     public var distance: Double?
+    /// Kilocalories since the workout started, by the treadmill's own estimate.
+    public var calories: Double?
+    /// Steps since the workout started, by the treadmill's own count.
+    public var steps: Int?
+    /// Beats per minute. Zero says the treadmill has no reading, which isn't the same as not
+    /// mentioning it: it clears the last one.
+    public var heartRate: Int?
 
     public init(
         belt: BeltState? = nil, speed: Double? = nil, incline: Double? = nil, elapsed: Int? = nil,
-        distance: Double? = nil
+        distance: Double? = nil, calories: Double? = nil, steps: Int? = nil, heartRate: Int? = nil
     ) {
         self.belt = belt
         self.speed = speed
         self.incline = incline
         self.elapsed = elapsed
         self.distance = distance
+        self.calories = calories
+        self.steps = steps
+        self.heartRate = heartRate
     }
 }

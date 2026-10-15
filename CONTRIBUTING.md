@@ -42,6 +42,21 @@ one that counts down, ramps its speed and reports every second:
 Scripts/build.sh && open build/CintaBar.app --args --simulate
 ```
 
+Add `--miles`, `--runaway` or `--ignores-pause` after `--simulate` to have it misbehave the way
+some treadmills do, and try what guards against that. The top of
+[`SimulatedLink.swift`](Sources/CintaBar/SimulatedLink.swift) says what each one does.
+
+## App icon
+
+The icon lives in two forms. `Support/CintaBar.icon` is the Icon Composer package: open it in Icon
+Composer (it ships with Xcode 26) to adjust the layers, the gradient or the Liquid Glass settings.
+`Support/AppIcon.icns` is what the app bundle ships, since SwiftPM can't compile the package;
+regenerate it from the package's layers with:
+
+```bash
+swift Scripts/make-icns.swift
+```
+
 ## Pull requests
 
 - Keep protocol logic and the `Treadmill` model in `TreadmillKit` and cover them with tests. The

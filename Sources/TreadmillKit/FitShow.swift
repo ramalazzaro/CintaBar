@@ -94,8 +94,12 @@ public enum FitShow {
         case speedRange(ClosedRange<Double>)
         /// The supported incline levels; `0...0` when the incline isn't motorized.
         case inclineRange(ClosedRange<Int>)
-        /// Speed is in km/h. `elapsed` is in seconds and only present during a workout.
-        case status(belt: BeltState, speed: Double, incline: Int, elapsed: Int?)
+        /// Speed is in km/h. `elapsed` is in seconds and only present during a workout, as are the
+        /// treadmill's own totals: `calories` in kcal, and `steps`. `heartRate` is in beats per
+        /// minute, and zero when there's no reading.
+        case status(
+            belt: BeltState, speed: Double, incline: Int, elapsed: Int?, calories: Double? = nil, steps: Int? = nil,
+            heartRate: Int = 0)
     }
 
     /// Decodes a notification from the treadmill.
@@ -132,11 +136,19 @@ public enum FitShow {
             guard status.hasTelemetry, parameters.count >= 4 else {
                 return .status(belt: belt, speed: 0, incline: 0, elapsed: nil)
             }
+            func word(at index: Int) -> Int { Int(parameters[index]) | Int(parameters[index + 1]) << 8 }
+            // A full frame goes on with the distance, calories, steps and heart rate. The distance
+            // is left for `Session` to integrate, because implementations disagree on its unit.
+            let isFull = parameters.count >= 11
             return .status(
                 belt: belt,
                 speed: Double(parameters[0]) / 10,
                 incline: Int(Int8(bitPattern: parameters[1])),
-                elapsed: Int(parameters[2]) | Int(parameters[3]) << 8
+                elapsed: word(at: 2),
+                // In tenths, going by the one implementation known to show the treadmill's figure.
+                calories: isFull ? Double(word(at: 6)) / 10 : nil,
+                steps: isFull ? word(at: 8) : nil,
+                heartRate: isFull ? Int(parameters[10]) : 0
             )
 
         default:

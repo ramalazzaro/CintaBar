@@ -36,9 +36,24 @@ import Testing
     }
 
     @Test func runningStatusCarriesTelemetry() {
-        // 3.5 km/h, incline 2, 300 s, then distance, calories, steps and heart rate.
+        // 3.5 km/h, incline 2, 300 s, a distance that isn't used, 2.5 kcal, 528 steps and 90 bpm.
         let frame = FitShow.frame([0x51, 3, 35, 2, 0x2C, 0x01, 0xF4, 0x01, 0x19, 0x00, 0x10, 0x02, 90])
-        #expect(FitShow.parse(frame) == .status(belt: .running, speed: 3.5, incline: 2, elapsed: 300))
+        #expect(
+            FitShow.parse(frame)
+                == .status(
+                    belt: .running, speed: 3.5, incline: 2, elapsed: 300, calories: 2.5, steps: 528, heartRate: 90))
+    }
+
+    @Test func totalsAndHeartRateNeedAFullFrame() {
+        // One byte short of a full frame, so the totals in it aren't taken either.
+        let short = FitShow.frame([0x51, 3, 35, 2, 0x2C, 0x01, 0xF4, 0x01, 0x19, 0x00, 0x10, 0x02])
+        #expect(FitShow.parse(short) == .status(belt: .running, speed: 3.5, incline: 2, elapsed: 300))
+
+        // Nothing counted yet and no hand on the sensors, with a byte of unknown meaning at the end.
+        let untouched = FitShow.frame([0x51, 3, 10, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0x55])
+        #expect(
+            FitShow.parse(untouched)
+                == .status(belt: .running, speed: 1.0, incline: 0, elapsed: 1, calories: 0, steps: 0, heartRate: 0))
     }
 
     @Test(arguments: [

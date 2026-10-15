@@ -9,13 +9,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build --configuration release
+# Universal, so one build runs on Apple silicon and Intel Macs.
+swift build --configuration release --arch arm64 --arch x86_64
 
 app=build/CintaBar.app
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS"
-cp "$(swift build --configuration release --show-bin-path)/CintaBar" "$app/Contents/MacOS/CintaBar"
+cp "$(swift build --configuration release --arch arm64 --arch x86_64 --show-bin-path)/CintaBar" "$app/Contents/MacOS/CintaBar"
 cp Support/Info.plist "$app/Contents/Info.plist"
+mkdir -p "$app/Contents/Resources"
+cp Support/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 
 # An ad hoc signature is enough to run locally with the sandbox and the hardened runtime on, but
 # macOS then asks for Bluetooth permission again after every rebuild. Set CODESIGN_IDENTITY to a

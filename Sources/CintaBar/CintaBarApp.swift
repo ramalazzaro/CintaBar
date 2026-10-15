@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let link: any TreadmillLink = CommandLine.arguments.contains("--simulate") ? SimulatedLink() : BluetoothLink()
         treadmill = Treadmill(link: link)
         super.init()
+
+        // The runaway guard has no warning in the menu yet, so it must not stop the belt unprompted.
+        treadmill.stopsRunawayBelt = false
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

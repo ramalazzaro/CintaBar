@@ -1,0 +1,32 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.29,0.33,0.39,1.00"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "glass": true,
+          "image-name": "figure.png",
+          "name": "figure"
+        },
+        {
+          "glass": true,
+          "image-name": "belt.png",
+          "name": "belt"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

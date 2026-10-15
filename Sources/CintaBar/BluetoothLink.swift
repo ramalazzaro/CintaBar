@@ -4,11 +4,17 @@ import TreadmillKit
 
 /// Reaches the treadmill over Core Bluetooth and speaks whichever protocol it offers.
 final class BluetoothLink: NSObject, TreadmillLink {
-    var eventHandler: (@MainActor (LinkEvent) -> Void)?
+    /// The model wires this up after the link exists, so whatever the link learned while starting
+    /// up would be lost. Setting it reports the connection as it stands.
+    var eventHandler: (@MainActor (LinkEvent) -> Void)? {
+        didSet { if eventHandler != nil { emit(.connection(connection)) } }
+    }
 
     private enum DefaultsKey {
         static let peripheral = "peripheralIdentifier"
         static let wireProtocol = "preferredProtocol"
+        /// Every treadmill found to ignore a pause, as its identifier and the protocol it was using.
+        static let ignoringPause = "treadmillsIgnoringPause"
     }
 
     private var central: CBCentralManager!
@@ -49,6 +55,9 @@ final class BluetoothLink: NSObject, TreadmillLink {
         super.init()
         // A nil queue delivers delegate callbacks on the main queue.
         central = CBCentralManager(delegate: self, queue: nil)
+        // The manager reports nothing until its state is known, which can be as late as the user
+        // answering the permission prompt. Say what's known meanwhile.
+        connection = .unavailable(unavailability(of: central.state))
     }
 
     // MARK: - TreadmillLink
@@ -155,6 +164,20 @@ final class BluetoothLink: NSObject, TreadmillLink {
         }
     }
 
+    /// Files the answer under the protocol as well as the treadmill: it's down to how the firmware
+    /// implements each, and one may honor a pause that the other ignores.
+    func remember(ignoresPause: Bool) {
+        guard let filing = pauseFiling else { return }
+        var ignoring = Set(defaults.stringArray(forKey: DefaultsKey.ignoringPause) ?? [])
+        if ignoresPause {
+            ignoring.insert(filing)
+        } else {
+            ignoring.remove(filing)
+        }
+        defaults.set(ignoring.sorted(), forKey: DefaultsKey.ignoringPause)
+        log.notice("Remembered that it \(ignoresPause ? "ignores" : "honors", privacy: .public) a pause")
+    }
+
     // MARK: - Connection
 
     private func emit(_ event: LinkEvent) {
@@ -199,7 +222,15 @@ final class BluetoothLink: NSObject, TreadmillLink {
             write(FitShow.queryInclineRange)
         }
         runPump()
+        let ignoring = defaults.stringArray(forKey: DefaultsKey.ignoringPause) ?? []
+        emit(.ignoresPause(pauseFiling.map(ignoring.contains) ?? false))
         connection = .ready(name: peripheral.name ?? "Treadmill")
+    }
+
+    /// How the connected treadmill and protocol are filed among those that ignore a pause.
+    private var pauseFiling: String? {
+        guard let peripheral, let activeProtocol else { return nil }
+        return "\(peripheral.identifier.uuidString) \(activeProtocol.rawValue)"
     }
 
     private func reset() {
@@ -293,14 +324,19 @@ final class BluetoothLink: NSObject, TreadmillLink {
         case .inclineRange(let range):
             inclineIsMotorized = range.upperBound > range.lowerBound
             emit(.inclineRange(Double(range.lowerBound)...Double(range.upperBound), step: 1))
-        case .status(let belt, let speed, let incline, let elapsed):
+        case .status(let belt, let speed, let incline, let elapsed, let calories, let steps, let heartRate):
             beltIsIdle = belt == .idle
-            emit(.sample(Sample(belt: belt, speed: speed, incline: Double(incline), elapsed: elapsed)))
+            let sample = Sample(
+                belt: belt, speed: speed, incline: Double(incline), elapsed: elapsed, calories: calories,
+                steps: steps, heartRate: heartRate)
+            emit(.sample(sample))
         }
     }
 
     private func apply(_ data: FTMS.TreadmillData) {
-        var sample = Sample(speed: data.speed, incline: data.incline, elapsed: data.elapsed, distance: data.distance)
+        var sample = Sample(
+            speed: data.speed, incline: data.incline, elapsed: data.elapsed, distance: data.distance,
+            calories: data.calories, steps: data.steps, heartRate: data.heartRate)
         if let speed = data.speed {
             ftmsBelt.record(speed: speed)
             sample.belt = ftmsBelt.state
@@ -319,14 +355,21 @@ extension BluetoothLink: CBCentralManagerDelegate {
         } else {
             // Peripherals are invalid from here on, so there's nothing to disconnect.
             reset()
-            let reason: Connection.Unavailability =
-                switch central.state {
-                case .poweredOff: .poweredOff
-                case .unauthorized: .unauthorized
-                case .unsupported: .unsupported
-                default: .unknown
-                }
-            connection = .unavailable(reason)
+            connection = .unavailable(unavailability(of: central.state))
+        }
+    }
+
+    /// Why a manager that isn't powered on can't be used.
+    ///
+    /// The manager stays in `.unknown` for as long as the permission prompt is unanswered, which
+    /// reads like a broken Bluetooth unless the authorization is checked too.
+    private func unavailability(of state: CBManagerState) -> Connection.Unavailability {
+        switch state {
+        case .poweredOff: .poweredOff
+        case .unauthorized: .unauthorized
+        case .unsupported: .unsupported
+        case .unknown, .resetting: CBManager.authorization == .notDetermined ? .permissionPending : .unknown
+        default: .unknown
         }
     }
 

@@ -61,6 +61,12 @@ public enum FTMS {
         public var incline: Double?
         /// Seconds.
         public var elapsed: Int?
+        /// Kilocalories since the workout started.
+        public var calories: Double?
+        /// Beats per minute. Zero means the field is there but the treadmill has no reading.
+        public var heartRate: Int?
+        /// Steps since the workout started. Not part of the standard; see where it's parsed.
+        public var steps: Int?
     }
 
     public static func parseTreadmillData(_ data: Data) -> TreadmillData? {
@@ -80,10 +86,29 @@ public enum FTMS {
         if has(4) { reader.skip(4) }  // Positive and negative elevation gain.
         if has(5) { reader.skip(1) }  // Instantaneous pace.
         if has(6) { reader.skip(1) }  // Average pace.
-        if has(7) { reader.skip(5) }  // Energy: total, per hour, per minute.
-        if has(8) { reader.skip(1) }  // Heart rate.
+        if has(7) {
+            // All ones means the treadmill doesn't count the energy spent.
+            parsed.calories = reader.unsigned(byteCount: 2).flatMap { $0 == 0xFFFF ? nil : Double($0) }
+            reader.skip(3)  // Energy per hour and per minute.
+        }
+        if has(8) { parsed.heartRate = reader.unsigned(byteCount: 1) }
         if has(9) { reader.skip(1) }  // Metabolic equivalent.
         if has(10) { parsed.elapsed = reader.unsigned(byteCount: 2) }
+        if has(11) { reader.skip(2) }  // Remaining time.
+        if has(12) { reader.skip(4) }  // Force on the belt and power output.
+
+        // The specification ends here: it reserves bits 13 to 15. What follows is an assumption.
+        //
+        // The Noga FT-200 sets bit 13 on a notification of its own that carries three more bytes,
+        // taken here for a step count, which is what at least one other vendor uses the bit for.
+        // Nobody has checked that against a count that moves: the bytes were all zero when
+        // captured. Only the first two are read. That's the same number as a 24-bit count for any
+        // workout under 65,536 steps, and it holds if the third byte turns out to be something
+        // else.
+        if has(13) {
+            parsed.steps = reader.unsigned(byteCount: 2)
+            reader.skip(1)
+        }
         return parsed
     }
 
